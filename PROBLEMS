@@ -4,3 +4,7 @@ This is a list of the problems that I need to work solutions for:
 - In Windows we know all system DLLs are going to load at the same address for a
 particular restart. I don't know if this is the case in Linux. Either way I am 
 going to need to figure out how to actually get the address of a function, like printf.
+    - turns out the approch in linux is completely different. Instead you act like a debugger
+        which gives you free reign in the process
+- Admin privleges???
+- 64-bit compatibility...
