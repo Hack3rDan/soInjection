@@ -74,3 +74,141 @@ GET_PID_CLEAN_RETURN:
     }
     return retVal;
 }
+
+int getDataFromProc(pid_t child, long addr, char *str, int len)
+{
+    char *laddr = str;
+    int i = 0, j = len/long_size;
+    union u
+    {
+        long val;
+        char chars[long_size];
+    } data;
+
+    while(i < j)
+    {
+        data.val = ptrace(  PTRACE_PEEKDATA,    // request
+                            child,              // pid
+                            addr + i * 4,       // addr
+                            NULL);              // data
+        memcpy( laddr,
+                data.chars,
+                sizeof(long));
+        i++;
+        laddr += sizeof(long);
+    }
+
+    j = len % sizeof(long);
+
+    if(j != 0)
+    {
+
+        data.val = ptrace(  PTRACE_PEEKDATA,    //request
+                            child,              // pid
+                            addr + i * 4,       // addr
+                            NULL);              // data
+        memcpy( laddr,
+                data.chars,
+                j);
+    }
+    str[len] = '\0';
+    return SO_INJECT_SUCCESS;
+}
+
+
+int putDataIntoProc(pid_t child, long addr, char *str, int len)
+{
+    char *laddr = str;
+    int i = 0, j = len / sizeof(long);
+    union u
+    {
+        long val;
+        char chars[sizeof(long)];
+    } data;
+
+    while(i < j)
+    {
+        memcpy( data.chars,
+                laddr,
+                sizeof(long));
+        ptrace( PTRACE_POKEDATA,    // request
+                child,              // pid
+                addr + i * 4,       // addr
+                data.val);          // data
+        i++;
+        laddr += sizeof(long);
+    }
+    
+    j = len % sizeof(long);
+    if(j != 0)
+    {
+        memcpy( data.chars,
+                laddr,
+                j);
+        ptrace( PTRACE_POKETEXT,    // request
+                child,              // pid
+                addr + i * 4,       // addr
+                data.val);          // data
+    }
+    
+    return SO_INJECT_SUCCESS;
+
+}
+
+int attachToProc(int pid, struct user_regs_struct *regs)
+{
+    ptrace( PTRACE_ATTACH,  // request
+            pid,            // pid
+            NULL,           // addr
+            NULL);          // data
+    wait(NULL);
+    ptrace( PTRACE_GETREGS, // request
+            pid,            // pid
+            NULL,           // addr
+            regs);          data
+    return SO_INJECT_SUCCESS;
+}
+
+int detachFromProc(int pid, struct user_regs_struct *regs)
+{
+    ptrace( PTRACE_SETREGS, // request
+            pid,            // pid
+            NULL,           // addr
+            regs);          // data
+    ptrace( PTRACE_DETACH,  // request
+            pid,            // pid
+            NULL,           // addr
+            NULL);          // NULL
+    return SO_INJECT_SUCCESS;
+}
+
+
+int injectCode(int pid, struct user_regs_struct *regs, void *backup, void *code, int lenOfCode, void *addrOfInject)
+{
+    if(NULL == regs || NULL == backup || NULL == code)
+    {
+        return SO_INJECT_NULL_PARAMETER;
+    }
+    if(NULL == addrOfInject)
+    {
+        addrOfInject = regs.eip;
+    }
+    // copy instruction to backukp variable
+    getDataFromProc(    pid,        // child
+                        addrOfInject,   // addr
+                        backup,     // str
+                        lenOfCode); // len
+    // insert breakpoint
+    // TODO: insert shellcode
+    putDataToProc(  pid,        // child
+                    addrOfInject,   // addr
+                    code,       // data
+                    lenOfCode); // lenOfData
+    // restore original
+    putDataToProc(  pid,
+                    addrOfInject,
+                    backup,
+                    lenOfCode);
+                    
+}
+
